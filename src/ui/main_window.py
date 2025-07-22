@@ -217,6 +217,22 @@ class MainWindow:
         )
         generate_output_button.pack(side=tk.RIGHT, padx=5)
 
+        #
+        # --- START OF CHANGE ---
+        #
+        refresh_button = ctk.CTkButton(
+            action_frame,
+            text="Refresh Files",
+            command=self.update_file_list,  # Re-uses the existing update method
+            font=("Segoe UI", 12),
+            width=150,
+            height=40
+        )
+        refresh_button.pack(side=tk.RIGHT, padx=5)
+        #
+        # --- END OF CHANGE ---
+        #
+
         change_folder_button = ctk.CTkButton(
             action_frame,
             text="Change Folder",
