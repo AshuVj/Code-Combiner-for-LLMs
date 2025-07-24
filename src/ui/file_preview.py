@@ -30,10 +30,16 @@ class FilePreview:
         preview_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.preview_text.configure(yscrollcommand=preview_scroll.set)
         
-    def display_preview(self, file_path):
+    def display_preview(self, file_path, is_binary=False):
         """Display a preview of the selected file with line numbers."""
         self.preview_text.configure(state="normal")
         self.preview_text.delete("1.0", tk.END)
+
+        if is_binary:
+            self.preview_text.insert(tk.END, "\n[ This is a binary file and cannot be previewed. ]")
+            self.preview_text.configure(state="disabled")
+            return
+        
         try:
             encoding = detect_file_encoding(file_path) or 'utf-8'
             with open(file_path, "r", encoding=encoding) as f:

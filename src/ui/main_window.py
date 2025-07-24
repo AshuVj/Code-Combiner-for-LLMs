@@ -19,8 +19,6 @@ from tkinter import filedialog, messagebox
 
 class MainWindow:
     def __init__(self, root: ctk.CTk):
-
-
         self.root = root
         self.root.title(WINDOW_TITLE)
         self.root.geometry(WINDOW_SIZE)
@@ -150,17 +148,21 @@ class MainWindow:
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         search_entry.bind("<KeyRelease>", self.perform_search)
 
-        # Treeview for files
+        # --- START OF MODIFICATION ---
+        # Treeview for files with the new "Type" column
         self.file_tree = ttk.Treeview(
             file_list_frame,
-            columns=("Filename", "Path"),
+            columns=("Filename", "Path", "Type"), # Added "Type"
             show="headings",
             selectmode="extended"
         )
         self.file_tree.heading("Filename", text="Filename")
         self.file_tree.heading("Path", text="Path")
+        self.file_tree.heading("Type", text="Type")   # New heading
         self.file_tree.column("Filename", width=200, anchor='w')
         self.file_tree.column("Path", width=400, anchor='w')
+        self.file_tree.column("Type", width=80, anchor='w')    # New column
+        # --- END OF MODIFICATION ---
         self.file_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0), pady=5)
 
         tree_scroll = ttk.Scrollbar(file_list_frame, orient="vertical", command=self.file_tree.yview)
@@ -217,21 +219,15 @@ class MainWindow:
         )
         generate_output_button.pack(side=tk.RIGHT, padx=5)
 
-        #
-        # --- START OF CHANGE ---
-        #
         refresh_button = ctk.CTkButton(
             action_frame,
             text="Refresh Files",
-            command=self.update_file_list,  # Re-uses the existing update method
+            command=self.update_file_list,
             font=("Segoe UI", 12),
             width=150,
             height=40
         )
         refresh_button.pack(side=tk.RIGHT, padx=5)
-        #
-        # --- END OF CHANGE ---
-        #
 
         change_folder_button = ctk.CTkButton(
             action_frame,
@@ -243,7 +239,6 @@ class MainWindow:
         )
         change_folder_button.pack(side=tk.RIGHT, padx=5)
 
-        # (Optional) Cancel Scan Button
         cancel_scan_btn = ctk.CTkButton(
             action_frame,
             text="Cancel Scan",
@@ -295,16 +290,12 @@ class MainWindow:
         scan_thread.start()
 
     def scan_files_thread(self):
-        """Thread target for scanning files in chunks (generator-based)."""
+        """Thread target for scanning files in chunks (generator-based). Preserves original logic."""
         try:
             # 1) First pass: estimate total file count
-            total_estimate = 0
-            for _ in self.scanner.yield_files():
-                total_estimate += 1
+            total_estimate = sum(1 for _ in self.scanner.yield_files())
 
             if total_estimate == 0:
-                # If no files found, just send a quick status
-                self.queue.put(("progress", 100))
                 self.queue.put(("status", "No files found."))
                 self.queue.put(("scan_complete", None))
                 return
@@ -312,11 +303,12 @@ class MainWindow:
             # 2) Second pass: yield the actual files and chunk them
             file_generator = self.scanner.yield_files()
 
-            chunk_size = 100  # adjust as needed
+            chunk_size = 100
             batch = []
             processed = 0
 
-            for file_tuple in file_generator:
+            # --- MODIFICATION: The yielded tuple now contains the file type ---
+            for file_tuple in file_generator: # (filename, rel_path, file_type)
                 if self.stop_scan:
                     self.queue.put(("status", "Scan cancelled by user."))
                     break
@@ -324,28 +316,22 @@ class MainWindow:
                 batch.append(file_tuple)
                 processed += 1
 
-                # If we have enough files in batch, add them
                 if len(batch) >= chunk_size:
                     self.queue.put(("add_files_bulk", batch.copy()))
                     batch.clear()
 
-                    # Throttle progress
                     progress = (processed / total_estimate) * 100
                     self.queue.put(("progress", progress))
                     self.queue.put(("status", f"Scanning... {processed}/{total_estimate}"))
-
-                    # Sleep a bit to keep UI responsive
                     time.sleep(0.01)
 
-            # Push leftover batch if not cancelled
             if not self.stop_scan and batch:
                 self.queue.put(("add_files_bulk", batch.copy()))
                 batch.clear()
 
             if not self.stop_scan:
-                # Final update if we finished scanning
                 self.queue.put(("progress", 100))
-                self.queue.put(("status", f"Scan complete. Found ~{processed} files."))
+                self.queue.put(("status", f"Scan complete. Found {processed} files."))
                 logger.info("File scan complete.")
 
         except Exception as e:
@@ -358,23 +344,26 @@ class MainWindow:
         """Process messages from the queue to update the GUI safely."""
         try:
             while True:
-                message = self.queue.get_nowait()
-                msg_type = message[0]
-
+                # Using get_nowait() and a tuple for message passing
+                msg_type, data = self.queue.get_nowait()
+                
+                # --- START OF MODIFICATION ---
                 if msg_type == "add_files_bulk":
-                    files_batch = message[1]
-                    for (file, rel_path) in files_batch:
-                        self.file_tree.insert("", "end", values=(file, rel_path))
-
+                    # data is a batch of (file, rel_path, file_type) tuples
+                    for (file, rel_path, file_type) in data:
+                        # Insert all three values into the Treeview
+                        self.file_tree.insert("", "end", values=(file, rel_path, file_type.capitalize()))
+                # --- END OF MODIFICATION ---
+                
                 elif msg_type == "progress":
-                    self.progress_bar.set(message[1] / 100)
+                    self.progress_bar.set(data / 100)
 
                 elif msg_type == "status":
-                    self.status_var.set(message[1])
+                    self.status_var.set(data)
 
                 elif msg_type == "error":
                     self.status_var.set("Error occurred")
-                    messagebox.showerror("Error", message[1])
+                    messagebox.showerror("Error", data)
                     self.enable_buttons()
 
                 elif msg_type == "scan_complete":
@@ -384,7 +373,7 @@ class MainWindow:
                     self.enable_buttons()
 
                 elif msg_type == "message":
-                    messagebox.showinfo("Info", message[1])
+                    messagebox.showinfo("Info", data)
 
         except Empty:
             pass
@@ -392,13 +381,22 @@ class MainWindow:
         self.root.after(100, self.process_queue)
 
     def preview_file(self, event):
-        """Preview the selected file's content."""
+        """Preview the selected file's content, handling binary files."""
         selected_items = self.file_tree.selection()
         if selected_items:
             item = selected_items[0]
-            filename, rel_path = self.file_tree.item(item)['values']
-            file_path = os.path.join(self.selected_folder, rel_path)
-            self.file_preview.display_preview(file_path)
+            # --- START OF MODIFICATION ---
+            # Unpack the 3 values and check the file type
+            filename, rel_path, file_type = self.file_tree.item(item)['values']
+
+            if file_type.lower() == 'binary':
+                # Pass a flag to the previewer
+                self.file_preview.display_preview(None, is_binary=True)
+            else:
+                # Normal text preview
+                file_path = os.path.join(self.selected_folder, rel_path)
+                self.file_preview.display_preview(file_path, is_binary=False)
+            # --- END OF MODIFICATION ---
 
     def exclude_selected_files(self):
         """Exclude the selected files from processing."""
@@ -409,7 +407,8 @@ class MainWindow:
 
         excluded_count = 0
         for item in selected_items:
-            filename, rel_path = self.file_tree.item(item)['values']
+            # --- MODIFICATION: Unpack 3 values, even if we only need one ---
+            _, rel_path, _ = self.file_tree.item(item)['values']
             absolute_path = os.path.abspath(os.path.join(self.selected_folder, rel_path))
             self.excluded_files.add(absolute_path)
             self.file_tree.delete(item)
@@ -461,22 +460,22 @@ class MainWindow:
         self.progress_bar.set(0)
         self.disable_buttons()
 
-        # Gather files from TreeView
-        files = []
+        # --- START OF MODIFICATION ---
+        # Gather files with their types from the TreeView
+        files_to_process = []
         for item in self.file_tree.get_children():
-            filename, rel_path = self.file_tree.item(item)['values']
-            files.append((filename, rel_path))
+            filename, rel_path, file_type = self.file_tree.item(item)['values']
+            # Pass the lowercase type ('text' or 'binary') to the processor
+            files_to_process.append((filename, rel_path, file_type.lower()))
+        # --- END OF MODIFICATION ---
 
         # Run in background
-        process_thread = Thread(target=self.process_files_thread, args=(files, output_path), daemon=True)
+        process_thread = Thread(target=self.process_files_thread, args=(files_to_process, output_path), daemon=True)
         process_thread.start()
 
     def process_files_thread(self, files, output_path):
         """Process/combine files in a background thread."""
         try:
-            total_files = len(files)
-            processed = 0
-
             def progress_callback(proc, total):
                 progress = (proc / total) * 100 if total > 0 else 100
                 self.queue.put(("progress", progress))
@@ -599,14 +598,15 @@ class MainWindow:
             logger.info("No settings to load.")
 
     def perform_search(self, event):
-        """Filter the TreeView based on search query."""
+        """Filter the TreeView based on search query, preserving original highlight logic."""
         query = self.search_var.get().lower()
         if not query:
             for item in self.file_tree.get_children():
                 self.file_tree.item(item, tags=())
         else:
             for item in self.file_tree.get_children():
-                filename, rel_path = self.file_tree.item(item)['values']
+                # --- MODIFICATION: Unpack 3 values to get search terms ---
+                filename, rel_path, _ = self.file_tree.item(item)['values']
                 if query in filename.lower() or query in rel_path.lower():
                     self.file_tree.item(item, tags=('match',))
                 else:
