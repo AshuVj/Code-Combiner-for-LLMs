@@ -73,10 +73,20 @@ class FileProcessor:
                             else:
                                 encoding = detect_file_encoding(file_path)
                                 with open(file_path, "r", encoding=encoding, errors="replace") as infile:
-                                    shutil.copyfileobj(infile, tmp, length=1024 * 1024)  # 1MB chunks
+                                    # manual chunked copy so we can honor cancellation mid-file
+                                    while True:
+                                        if cancel_event and getattr(cancel_event, "is_set", None) and cancel_event.is_set():
+                                            tmp.write("\n[Operation cancelled by user]\n")
+                                            logger.info("Processing cancelled by user during file copy.")
+                                            break
+                                        chunk = infile.read(1024 * 1024)  # 1MB
+                                        if not chunk:
+                                            break
+                                        tmp.write(chunk)
                         except Exception as e:
                             logger.error(f"Error reading text file {file_path}: {str(e)}")
                             tmp.write(f"[Error reading file: {str(e)}]\n")
+
 
                     elif file_type == "binary":
                         tmp.write("[Binary file - content not included]\n")

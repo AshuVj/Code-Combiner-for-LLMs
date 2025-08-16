@@ -2,3 +2,4 @@ customtkinter==5.2.0
 chardet==5.2.0
 platformdirs==4.2.2
 pathspec==0.12.1
+typing_extensions>=4.0.0

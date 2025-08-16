@@ -15,7 +15,7 @@ class FileScanner:
     def __init__(self, base_folder: str):
         self.base_folder = base_folder
         self.excluded_folders = set()      # Relative paths from user settings
-        self.excluded_folder_names = EXCLUDED_FOLDER_NAMES_DEFAULT  # Default set, can be updated
+        self.excluded_folder_names = set(EXCLUDED_FOLDER_NAMES_DEFAULT)
         self.excluded_file_patterns = set()
         self.excluded_files = set()        # Absolute paths from user settings
 

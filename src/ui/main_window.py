@@ -343,9 +343,9 @@ class MainWindow:
 
         ctk.CTkLabel(search_frame, text="Search:", font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(0, 10))
         self.search_var = tk.StringVar()
-        search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, width=200)
-        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        search_entry.bind("<KeyRelease>", self.perform_search)
+        self.search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, width=200)  # <-- save to self
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.search_entry.bind("<KeyRelease>", self.perform_search)
 
         # Treeview (Filename, Path, Type)
         self.file_tree = ttk.Treeview(
@@ -533,7 +533,10 @@ class MainWindow:
         self.root.bind("<Delete>", lambda e: self.exclude_selected_files())
         self.root.bind("<Control-g>", lambda e: self.generate_combined_output())
         self.root.bind("<Control-p>", lambda e: self.export_file_tree())
-        self.root.bind("<Control-a>", lambda e: (self.select_all_files(), "break"))
+        def _on_ctrl_a(_e):
+            self.select_all_files()
+            return "break"
+        self.root.bind("<Control-a>", _on_ctrl_a)
         self.root.bind("<Control-d>", lambda e: self.deselect_all_files())
         # Quick maximize toggle (useful if WM ignores saved state)
         self.root.bind("<F11>", lambda e: self._set_maximized(True))
@@ -544,7 +547,11 @@ class MainWindow:
         ))
 
     def _focus_search(self):
-        pass
+        try:
+            self.search_entry.focus_set()
+            self.search_entry.select_range(0, tk.END)
+        except Exception:
+            pass
 
     # ---------------- Dynamic names ----------------
 
@@ -881,7 +888,12 @@ class MainWindow:
         )
         self.scanner.excluded_file_patterns = self.exclusion_manager.excluded_file_patterns
         self.scanner.excluded_files = self.excluded_files
-
+        try:
+            self.scanner.excluded_folder_names = set(EXCLUDED_FOLDER_NAMES_DEFAULT) | set(
+                getattr(self.exclusion_manager, "excluded_folder_names", set())
+            )
+        except Exception:
+            self.scanner.excluded_folder_names = set(EXCLUDED_FOLDER_NAMES_DEFAULT)
         logger.debug(
             f"FileScanner Exclusions Set:\n"
             f"Excluded Folders: {self.scanner.excluded_folders}\n"
