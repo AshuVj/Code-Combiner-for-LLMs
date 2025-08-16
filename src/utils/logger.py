@@ -1,44 +1,32 @@
 # src/utils/logger.py
 
-import os
 import logging
 from pathlib import Path
+from platformdirs import user_log_dir
+
+APP_NAME = "FileCombinerApp"
+APP_AUTHOR = "AshutoshVijay"  # adjust if you want
 
 def setup_logger():
-    """
-    Set up a minimal logger that writes to the user's AppData directory.
-    """
     try:
-        # Define the log directory within LOCALAPPDATA
-        local_app_data = Path(os.getenv('LOCALAPPDATA') or Path.home() / 'AppData' / 'Local')
-        log_dir = local_app_data / 'FileCombinerApp' / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)  # Create the directory if it doesn't exist
+        log_dir = Path(user_log_dir(appname=APP_NAME, appauthor=APP_AUTHOR))
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "app.log"
 
-        log_file = log_dir / 'app.log'
+        logger = logging.getLogger(APP_NAME)
+        logger.setLevel(logging.INFO)
 
-        # Configure the logger
-        logger = logging.getLogger("FileCombinerApp")
-        logger.setLevel(logging.INFO)  # Set to INFO for minimal logging
-
-        # Create a file handler
-        handler = logging.FileHandler(log_file, encoding='utf-8')
-        handler.setLevel(logging.INFO)
-
-        # Create a simple formatter
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-
-        # Add the handler to the logger if not already added
-        if not logger.handlers:
-            logger.addHandler(handler)
+        # Avoid duplicate handlers if reimported
+        if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+            fh = logging.FileHandler(log_file, encoding="utf-8")
+            fh.setLevel(logging.INFO)
+            fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            fh.setFormatter(fmt)
+            logger.addHandler(fh)
 
         return logger
-
-    except Exception as e:
-        # Fallback: Log to console if file logging fails
+    except Exception:
         logging.basicConfig(level=logging.INFO)
-        logging.error(f"Failed to set up file logger: {e}")
-        return logging.getLogger("FileCombinerApp")
+        return logging.getLogger(APP_NAME)
 
-# Initialize the logger
 logger = setup_logger()

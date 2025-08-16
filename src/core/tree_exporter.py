@@ -2,17 +2,33 @@
 
 import os
 import fnmatch
-from typing import Callable, Iterable, List, Tuple, Set
+from typing import Callable, List, Tuple, Set, Optional
 from src.config import PREDEFINED_EXCLUDED_FILES
 
+def _fmt_size(n: int) -> str:
+    if n < 1024:
+        return f"{n} B"
+    n /= 1024.0
+    if n < 1024:
+        return f"{n:.1f} KB"
+    n /= 1024.0
+    if n < 1024:
+        return f"{n:.1f} MB"
+    n /= 1024.0
+    return f"{n:.1f} GB"
 
 class TreeExporter:
     """
-    Builds an ASCII/Unicode file tree for a folder, honoring exclusions:
+    Builds a file tree for a folder, honoring exclusions:
       - excluded_folder_names: set of folder names to skip anywhere
       - excluded_folders: set of relative folder paths (from base) to skip recursively
       - excluded_file_patterns: fnmatch patterns for filenames
       - excluded_files: absolute file paths to skip
+
+    Options:
+      - style: "unicode" (├─ │ └─) or "ascii" (|-- | `--)
+      - include_sizes: append "(12.3 KB)" for files
+      - markdown: wrap output in ```text fences
     """
 
     def __init__(
@@ -33,9 +49,9 @@ class TreeExporter:
     # ---------- public API ----------
 
     def count_nodes(self) -> int:
-        """Rough count of included dirs+files for progress."""
-        total = 1  # root line
-        for rel_dir, dirs, files in self._iter_lists():
+        total = 1  # root
+        for _ in self._iter_lists():
+            rel_dir, dirs, files = _
             total += len(dirs) + len(files)
         return total
 
@@ -45,13 +61,10 @@ class TreeExporter:
         *,
         style: str = "unicode",
         progress: Callable[[int, int], None] | None = None,
+        include_sizes: bool = False,
+        markdown: bool = False,
     ) -> bool:
-        """
-        Write the tree to dest_path.
-        style: 'unicode' (├─, │, └─) or 'ascii' (|--, |, `--).
-        progress: callback(done, total)
-        """
-        lines = self.build_lines(style=style, progress=progress)
+        lines = self.build_lines(style=style, progress=progress, include_sizes=include_sizes, markdown=markdown)
         try:
             with open(dest_path, "w", encoding="utf-8") as f:
                 for line in lines:
@@ -67,15 +80,20 @@ class TreeExporter:
         *,
         style: str = "unicode",
         progress: Callable[[int, int], None] | None = None,
+        include_sizes: bool = False,
+        markdown: bool = False,
     ) -> List[str]:
-        """Return the tree lines."""
         chars = self._style_chars(style)
         root_name = os.path.basename(self.base) or self.base
 
         total = self.count_nodes()
         done = 0
 
-        lines: List[str] = [root_name]
+        lines: List[str] = []
+        if markdown:
+            lines.append("```text")
+
+        lines.append(root_name)
         done += 1
         if progress:
             progress(done, total)
@@ -92,11 +110,9 @@ class TreeExporter:
 
             for e in entries:
                 name = e.name
-                # Skip '.' and '..'
                 if name in (".", ".."):
                     continue
 
-                # Build rel paths
                 child_rel = os.path.normpath(os.path.join(rel_dir, name)) if rel_dir else name
 
                 if e.is_dir(follow_symlinks=False):
@@ -108,7 +124,6 @@ class TreeExporter:
                         continue
                     files.append(name)
 
-            # sort case-insensitively
             key = lambda s: s.lower()
             dirs.sort(key=key)
             files.sort(key=key)
@@ -122,7 +137,17 @@ class TreeExporter:
             for idx, (name, is_dir) in enumerate(children):
                 is_last = (idx == len(children) - 1)
                 connector = chars["L"] if is_last else chars["T"]
-                line = f"{prefix}{connector} {name}"
+
+                suffix = ""
+                if include_sizes and not is_dir:
+                    full = os.path.join(self.base, rel_dir, name) if rel_dir else os.path.join(self.base, name)
+                    try:
+                        sz = os.path.getsize(full)
+                        suffix = f" ({_fmt_size(sz)})"
+                    except OSError:
+                        pass
+
+                line = f"{prefix}{connector} {name}{suffix}"
                 lines.append(line)
                 done += 1
                 if progress:
@@ -130,11 +155,14 @@ class TreeExporter:
 
                 if is_dir:
                     child_rel = os.path.normpath(os.path.join(rel_dir, name)) if rel_dir else name
-                    # Next prefix keeps vertical line if not last
                     next_prefix = prefix + (chars["V"] + "   " if not is_last else "    ")
                     walk(child_rel, next_prefix)
 
         walk("", "")
+
+        if markdown:
+            lines.append("```")
+
         return lines
 
     # ---------- internals ----------
@@ -142,26 +170,15 @@ class TreeExporter:
     def _style_chars(self, style: str) -> dict:
         style = (style or "").lower()
         if style == "ascii":
-            return {
-                "T": "|--",  # tee
-                "L": "`--",  # last
-                "V": "|",    # vertical
-            }
-        # default unicode
-        return {
-            "T": "├──",
-            "L": "└──",
-            "V": "│",
-        }
+            return {"T": "|--", "L": "`--", "V": "|"}
+        return {"T": "├──", "L": "└──", "V": "│"}
 
     def _iter_lists(self):
-        """Yield (rel_dir, dirs, files) for all dirs, filtered."""
         for root_dir, dirs, files in os.walk(self.base, topdown=True):
             rel_root = os.path.normpath(os.path.relpath(root_dir, self.base))
             if rel_root == ".":
                 rel_root = ""
 
-            # dir filtering in-place
             keep_dirs = []
             for d in list(dirs):
                 child_rel = os.path.normpath(os.path.join(rel_root, d)) if rel_root else d
@@ -169,7 +186,6 @@ class TreeExporter:
                     keep_dirs.append(d)
             dirs[:] = keep_dirs
 
-            # files filtered snapshot
             keep_files = []
             for f in files:
                 child_rel = os.path.normpath(os.path.join(rel_root, f)) if rel_root else f
@@ -179,11 +195,9 @@ class TreeExporter:
             yield rel_root, keep_dirs, keep_files
 
     def _is_dir_excluded(self, rel_path: str, name: str) -> bool:
-        # name-based exclusion anywhere in path
         if name in self.excluded_folder_names:
             return True
 
-        # user excluded full relative paths (dir or subdir)
         rel_norm = os.path.normpath(rel_path)
         for ex in self.excluded_folders:
             ex_norm = os.path.normpath(ex)
@@ -194,13 +208,10 @@ class TreeExporter:
     def _is_file_excluded(self, rel_path: str, filename: str) -> bool:
         if filename in PREDEFINED_EXCLUDED_FILES:
             return True
-
         for pattern in self.excluded_file_patterns:
             if fnmatch.fnmatch(filename, pattern):
                 return True
-
         abs_path = os.path.abspath(os.path.join(self.base, rel_path))
         if abs_path in self.excluded_files_abs:
             return True
-
         return False

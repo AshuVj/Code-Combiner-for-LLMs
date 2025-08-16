@@ -5,7 +5,6 @@ import os
 # Constants
 PREDEFINED_EXCLUDED_FILES = {"combined_output.txt", "README.md"}
 
-# --- START OF CHANGE ---
 # More comprehensive default exclusions for common project folders
 EXCLUDED_FOLDER_NAMES_DEFAULT = {
     "venv",
@@ -18,7 +17,7 @@ EXCLUDED_FOLDER_NAMES_DEFAULT = {
     "node_modules"
 }
 
-# A set of known binary file extensions to always exclude from content processing
+# Known binary file extensions to always exclude from content processing
 BINARY_FILE_EXTENSIONS = {
     # Compiled/Object files
     ".pyc", ".pyo", ".pyd", ".o", ".a", ".so", ".lib", ".dll", ".exe",
@@ -33,11 +32,15 @@ BINARY_FILE_EXTENSIONS = {
     # Other
     ".db", ".sqlite3", ".dat", ".bin", ".lock", ".log"
 }
-# --- END OF CHANGE ---
 
 SETTINGS_FILENAME = "exclusion_settings.json"
-LOG_FILENAME = os.path.join("logs", "file_combiner_app.log")
-PREVIEW_CHUNK_SIZE = 10240  # Number of characters to read for preview
+
+# Preview limits / chunking
+PREVIEW_CHUNK_SIZE = 10240      # characters to read for preview
+PREVIEW_MAX_BYTES = 2 * 1024 * 1024     # 2 MB
+
+# Processing safeguard: skip huge files (write a note instead of content)
+PROCESS_MAX_BYTES = 50 * 1024 * 1024    # 50 MB
 
 # UI Constants
 WINDOW_SIZE = "1200x800"
