@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from platformdirs import user_log_dir
 
-APP_NAME = "FileCombinerApp"
+APP_NAME = "Code Combiner for LLMs"
 APP_AUTHOR = "AshutoshVijay"  # adjust if you want
 
 def setup_logger():

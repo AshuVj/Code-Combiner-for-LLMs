@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from platformdirs import user_config_dir
 
-APP_NAME = "FileCombinerApp"
+APP_NAME = "Code Combiner for LLMs"
 APP_AUTHOR = "AshutoshVijay"
 
 def _prefs_path() -> Path:

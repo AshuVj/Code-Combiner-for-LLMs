@@ -73,7 +73,7 @@ except Exception:
     PREDEFINED_EXCLUDED_FILES = {
         "*.pyc", "*.pyo", "*.class", ".DS_Store", "Thumbs.db", "combined_output.txt"
     }
-    WINDOW_TITLE = "File Combiner"
+    WINDOW_TITLE = "Code Combiner for LLMs"
 # =======================
 # Shared App State
 # =======================
@@ -1739,7 +1739,7 @@ class AboutPage(QWidget):
         title.setStyleSheet("font-size:20px; font-weight:600;")
         root.addWidget(title)
         t = QLabel(
-            "FileCombinerApp — Fluent UI (Win11) port\n"
+            "Code Combiner for LLMs — Fluent UI (Win11) port\n"
             "© 2025 Ashutosh Vijay — MIT License\n\n"
             "Built with PySide6 + QFluentWidgets."
         )

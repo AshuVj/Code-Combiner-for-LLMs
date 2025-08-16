@@ -1,7 +1,7 @@
-File Combiner Application
+Code Combiner for LLMs Application
 =========================
 
-The File Combiner Application is a powerful, user-friendly tool designed to streamline the process of merging multiple files into a single, cohesive output. Whether you're working with scripts, logs, or plain text documents, this application provides an intuitive interface and advanced features to make file management effortless.
+The Code Combiner for LLMs Application is a powerful, user-friendly tool designed to streamline the process of merging multiple files into a single, cohesive output. Whether you're working with scripts, logs, or plain text documents, this application provides an intuitive interface and advanced features to make file management effortless.
 
 Say goodbye to the hassle of manual file merging—our application ensures accuracy, efficiency, and customization at every step.
 
@@ -31,7 +31,7 @@ Features
 - Lightweight Logging:
   Capture essential application events and errors to ensure reliability, with logs stored in a user-friendly location.
 
-Why Choose the File Combiner Application?
+Why Choose the Code Combiner for LLMs Application?
 -----------------------------------------
 Designed for professionals, developers, and anyone dealing with large file collections, this application offers:
 - Speed: Process hundreds of files in seconds.
@@ -72,4 +72,4 @@ Acknowledgments
 - Developed with customtkinter for a sleek and modern graphical user interface.
 - Powered by chardet for reliable file encoding detection.
 
-Experience the simplicity and efficiency of managing multiple files. Try the File Combiner Application today!
+Experience the simplicity and efficiency of managing multiple files. Try the Code Combiner for LLMs Application today!
