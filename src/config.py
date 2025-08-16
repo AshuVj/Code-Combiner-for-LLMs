@@ -1,11 +1,9 @@
 # src/config.py
 
-import os
+# Nothing is hidden by default – user decides in the UI.
+PREDEFINED_EXCLUDED_FILES: set[str] = set()
 
-# Constants
-PREDEFINED_EXCLUDED_FILES = {"combined_output.txt", "README.md"}
-
-# More comprehensive default exclusions for common project folders
+# Toggleable “common junk” folder names (exposed via checkbox on the Files page)
 EXCLUDED_FOLDER_NAMES_DEFAULT = {
     "venv",
     "__pycache__",
@@ -14,10 +12,10 @@ EXCLUDED_FOLDER_NAMES_DEFAULT = {
     ".vscode",
     "build",
     "dist",
-    "node_modules"
+    "node_modules",
 }
 
-# Known binary file extensions to always exclude from content processing
+# Known binary file extensions (for preview/type)
 BINARY_FILE_EXTENSIONS = {
     # Compiled/Object files
     ".pyc", ".pyo", ".pyd", ".o", ".a", ".so", ".lib", ".dll", ".exe",
@@ -30,18 +28,18 @@ BINARY_FILE_EXTENSIONS = {
     # Audio/Video
     ".mp3", ".wav", ".mp4", ".mov", ".avi",
     # Other
-    ".db", ".sqlite3", ".dat", ".bin", ".lock", ".log"
+    ".db", ".sqlite3", ".dat", ".bin", ".lock", ".log",
 }
 
 SETTINGS_FILENAME = "exclusion_settings.json"
 
 # Preview limits / chunking
-PREVIEW_CHUNK_SIZE = 10240      # characters to read for preview
-PREVIEW_MAX_BYTES = 2 * 1024 * 1024     # 2 MB
+PREVIEW_CHUNK_SIZE = 10240                # characters for preview
+PREVIEW_MAX_BYTES = 2 * 1024 * 1024       # 2 MB
 
-# Processing safeguard: skip huge files (write a note instead of content)
-PROCESS_MAX_BYTES = 50 * 1024 * 1024    # 50 MB
+# Processing safeguard: skip huge files (write a note)
+PROCESS_MAX_BYTES = 50 * 1024 * 1024      # 50 MB
 
-# UI Constants
+# UI
 WINDOW_SIZE = "1200x800"
-WINDOW_TITLE = "File Combiner Application"
+WINDOW_TITLE = "Code Combiner for LLMs"

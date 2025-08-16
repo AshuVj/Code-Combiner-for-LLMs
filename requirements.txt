@@ -1,5 +1,12 @@
-customtkinter==5.2.0
-chardet==5.2.0
+# Core
+PySide6>=6.9.0            # 6.9.x is the first family that supports Python 3.13
+PySide6-Fluent-Widgets>=1.8.6  # Provides the 'qfluentwidgets' module on PyPI
+
+# App deps
 platformdirs==4.2.2
 pathspec==0.12.1
-typing_extensions>=4.0.0
+chardet==5.2.0
+typing_extensions>=4.14.0
+
+# Optional (for syntax highlighting in preview)
+Pygments~=2.19.2
