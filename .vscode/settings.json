@@ -1,0 +1,5 @@
+{
+    "chat.implicitContext.suggestedContext": true,
+    "maven.showInExplorerContextMenu": false,
+    "python.REPL.sendToNativeREPL": false
+}
