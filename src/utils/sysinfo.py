@@ -40,7 +40,23 @@ def _which(cmd: str) -> Optional[str]:
 
 def _run(cmd: List[str]) -> Tuple[bool, str]:
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        si = None
+        cf = 0
+        if os.name == "nt":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0
+            cf = subprocess.CREATE_NO_WINDOW
+
+        out = subprocess.check_output(
+            cmd,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            startupinfo=si,
+            creationflags=cf,
+        )
         return True, out.strip()
     except Exception:
         return False, ""

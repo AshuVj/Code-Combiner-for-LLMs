@@ -4,6 +4,7 @@ import sys
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Set
+import ctypes
 
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication
@@ -250,8 +251,22 @@ class MainFluentWindow(FluentWindow):
         self._save_window_state()
         super().closeEvent(event)
 
-def launch_qt():
-    app = QApplication.instance() or QApplication(sys.argv)
+def launch_qt() -> int:
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AshutoshVijay.CodeCombiner")
+        except Exception:
+            pass
+    app = QApplication(sys.argv)
+
+    # Windows: set AppUserModelID so the taskbar picks our icon & group correctly
+
+
+    # Global app icon (fixes taskbar icon)
+    app.setWindowIcon(QIcon(resource_path("assets/app.ico")))
+
     win = MainFluentWindow()
+    # (Optional) turn off noisy event filter if you had one
+    # win.installEventFilter(_EventTap())  # <- comment this out if present and chatty
     win.show()
     return app.exec()

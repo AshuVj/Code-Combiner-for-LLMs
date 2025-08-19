@@ -1,7 +1,9 @@
 # src/config.py
 
+# App settings file name (per-project)
+SETTINGS_FILENAME = "exclusion_settings.json"
 # Nothing is hidden by default – user decides in the UI.
-PREDEFINED_EXCLUDED_FILES: set[str] = set()
+PREDEFINED_EXCLUDED_FILES: set[str] = {SETTINGS_FILENAME}
 
 # Toggleable “common junk” folder names (exposed via checkbox on the Files page)
 EXCLUDED_FOLDER_NAMES_DEFAULT = {
