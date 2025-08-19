@@ -1,18 +1,17 @@
-# src/ui_qt/pages/settings_page.py
 from __future__ import annotations
-
+import logging
 from typing import TYPE_CHECKING
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout
-from qfluentwidgets import ComboBox, SwitchButton, setTheme, Theme
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from qfluentwidgets import ComboBox
 from src.utils.prefs import load_prefs, save_prefs
+from src.ui_qt.theming import AVAILABLE_THEMES
 
-# Import only for type checking to avoid runtime circular deps
 if TYPE_CHECKING:
     from src.ui_qt.app_window import MainFluentWindow
 
+log = logging.getLogger("settings")
 
 class SettingsPage(QWidget):
-    """Settings: theme + mica + UI scale."""
     def __init__(self, appwin: "MainFluentWindow"):
         super().__init__(parent=appwin)
         self.setObjectName("SettingsPage")
@@ -20,28 +19,19 @@ class SettingsPage(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
+
         title = QLabel("Settings")
         title.setStyleSheet("font-size:20px; font-weight:600;")
         root.addWidget(title)
 
-        # theme
         theme_row = QHBoxLayout()
         theme_row.addWidget(QLabel("Theme:"))
         self.theme_combo = ComboBox(self)
-        self.theme_combo.addItems(["System", "Light", "Dark"])
+        self.theme_combo.addItems(AVAILABLE_THEMES)
         theme_row.addWidget(self.theme_combo)
         theme_row.addStretch(1)
         root.addLayout(theme_row)
 
-        # effects
-        mica_row = QHBoxLayout()
-        self.mica_switch = SwitchButton("Mica effect", self)
-        self.mica_switch.setChecked(True)
-        mica_row.addWidget(self.mica_switch)
-        mica_row.addStretch(1)
-        root.addLayout(mica_row)
-
-        # UI scale
         scale_row = QHBoxLayout()
         scale_row.addWidget(QLabel("UI scale:"))
         self.scale_combo = ComboBox(self)
@@ -52,52 +42,43 @@ class SettingsPage(QWidget):
 
         root.addStretch(1)
 
-        # signals
-        self.theme_combo.currentTextChanged.connect(self._on_theme_change)
-        self.mica_switch.checkedChanged.connect(self._on_mica_toggle)
-        self.scale_combo.currentTextChanged.connect(self._on_scale_change)
-
-        # load prefs
         prefs = load_prefs()
         theme_pref = prefs.get("theme_mode", "Dark")
-        mica_pref  = bool(prefs.get("mica_enabled", True))
-        scale_pref = int(prefs.get("ui_scale", 100))
+        if theme_pref not in AVAILABLE_THEMES:
+            theme_pref = "Dark"
+        self.theme_combo.setCurrentText(theme_pref)
 
-        self.theme_combo.setCurrentText(theme_pref if theme_pref in ["System", "Light", "Dark"] else "Dark")
-        self.mica_switch.setChecked(mica_pref)
+        scale_pref = int(prefs.get("ui_scale", 100))
         label = f"{scale_pref}%"
-        if label not in [self.scale_combo.itemText(i) for i in range(self.scale_combo.count())]:
+        items = [self.scale_combo.itemText(i) for i in range(self.scale_combo.count())]
+        if label not in items:
             label = "100%"
         self.scale_combo.setCurrentText(label)
+        self._apply_scale_now(label)
 
-        # apply
-        self._on_theme_change(self.theme_combo.currentText())
-        self._on_mica_toggle(self.mica_switch.isChecked())
-        self._on_scale_change(self.scale_combo.currentText())
+        self.theme_combo.currentTextChanged.connect(self._on_theme_change)
+        self.scale_combo.currentTextChanged.connect(self._on_scale_change)
 
-    def _on_theme_change(self, text: str):
-        if text.lower() == "system":
-            setTheme(Theme.AUTO)
-        elif text.lower() == "light":
-            setTheme(Theme.LIGHT)
-        else:
-            setTheme(Theme.DARK)
+    def _on_theme_change(self, name: str):
+        log.info("SettingsPage: theme changed to '%s'", name)
+        self.appwin.update_theme(name)
         prefs = load_prefs()
-        prefs["theme_mode"] = text
+        prefs["theme_mode"] = name
         save_prefs(prefs)
 
-    def _on_mica_toggle(self, on: bool):
-        self.appwin.setMicaEffectEnabled(bool(on))
-        prefs = load_prefs()
-        prefs["mica_enabled"] = bool(on)
-        save_prefs(prefs)
-
-    def _on_scale_change(self, label: str):
+    def _apply_scale_now(self, label: str):
         try:
             pct = int(label.strip("%"))
         except Exception:
             pct = 100
+        log.info("SettingsPage: UI scale -> %s (%d%%)", label, pct)
         self.appwin.apply_ui_scale(pct)
+
+    def _on_scale_change(self, label: str):
+        self._apply_scale_now(label)
         prefs = load_prefs()
-        prefs["ui_scale"] = pct
+        try:
+            prefs["ui_scale"] = int(label.strip("%"))
+        except Exception:
+            prefs["ui_scale"] = 100
         save_prefs(prefs)
