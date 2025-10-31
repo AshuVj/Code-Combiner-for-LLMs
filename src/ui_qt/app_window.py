@@ -1,7 +1,6 @@
 from __future__ import annotations
 import os
 import sys
-import logging
 from dataclasses import dataclass, field
 from typing import Optional, Set
 import ctypes
@@ -27,8 +26,7 @@ from src.core.settings_manager import SettingsManager
 from src.utils.prefs import load_prefs, save_prefs
 from src.config import WINDOW_TITLE
 from src.ui_qt.theming import apply_theme_by_name
-
-log = logging.getLogger("app")
+from src.utils.logger import logger as log
 
 @dataclass
 class AppState:
@@ -182,17 +180,42 @@ class MainFluentWindow(FluentWindow):
                 st.settings_mgr = SettingsManager(st.selected_folder)
             else:
                 return
+        excluded_files_serialized: list[str] = []
+        for p in st.excluded_files_abs:
+            if st.selected_folder:
+                try:
+                    rel = os.path.relpath(p, st.selected_folder)
+                    # relpath may produce paths with .. for outside files; keep only ones within tree
+                    if not rel.startswith("..") and not os.path.isabs(rel):
+                        excluded_files_serialized.append(rel)
+                        continue
+                except Exception:
+                    pass
+            excluded_files_serialized.append(f"ABS::{p}")
+
         settings = {
             "selected_folder": st.selected_folder,
             "excluded_folders": list(st.excluded_folders),
             "excluded_folder_names": list(st.excluded_folder_names),
             "excluded_file_patterns": list(st.excluded_file_patterns),
-            "excluded_files": [
-                os.path.relpath(p, st.selected_folder) if st.selected_folder else p
-                for p in st.excluded_files_abs
-            ],
+            "excluded_files": excluded_files_serialized,
         }
-        st.settings_mgr.save_settings(settings)
+        ok = st.settings_mgr.save_settings(settings)
+        if not ok:
+            msg = st.settings_mgr.last_error or "Could not persist project settings."
+            try:
+                InfoBar.error("Save failed", msg, parent=self,
+                              position=InfoBarPosition.TOP_RIGHT, duration=3500)
+            except Exception:
+                pass
+            return
+        if st.settings_mgr.last_warning:
+            try:
+                InfoBar.info("Settings stored", st.settings_mgr.last_warning, parent=self,
+                             position=InfoBarPosition.TOP_RIGHT, duration=4000)
+            except Exception:
+                pass
+            st.settings_mgr.last_warning = None
         prefs = load_prefs()
         prefs["last_folder"] = st.selected_folder
         prefs["apply_gitignore"] = st.apply_gitignore
@@ -216,14 +239,25 @@ class MainFluentWindow(FluentWindow):
         st.excluded_file_patterns = set(s.get("excluded_file_patterns", []))
         excl_files_rel = s.get("excluded_files", [])
         abs_list = set()
-        for rel in excl_files_rel:
+        for entry in excl_files_rel:
+            if isinstance(entry, str) and entry.startswith("ABS::"):
+                abs_list.add(entry[5:])
+                continue
+            rel = entry
             try:
                 abs_list.add(os.path.abspath(os.path.join(st.selected_folder, rel)))
             except Exception:
-                pass
+                log.warning("Failed to resolve excluded file %s", rel)
         st.excluded_files_abs = abs_list
         if getattr(self, "exclusions_page", None):
             self.exclusions_page.refresh_ui_lists()
+        if st.settings_mgr.last_warning:
+            try:
+                InfoBar.info("Settings loaded", st.settings_mgr.last_warning, parent=self,
+                             position=InfoBarPosition.TOP_RIGHT, duration=4000)
+            except Exception:
+                pass
+            st.settings_mgr.last_warning = None
 
     def _restore_window_state(self):
         prefs = load_prefs()
@@ -248,6 +282,11 @@ class MainFluentWindow(FluentWindow):
             pass
 
     def closeEvent(self, event):
+        try:
+            # Persist current project settings (exclusions, etc.) before exit
+            self.save_settings()
+        except Exception:
+            pass
         self._save_window_state()
         super().closeEvent(event)
 

@@ -1,75 +1,44 @@
-Code Combiner for LLMs Application
-=========================
+Code Combiner for LLMs
+======================
 
-The Code Combiner for LLMs Application is a powerful, user-friendly tool designed to streamline the process of merging multiple files into a single, cohesive output. Whether you're working with scripts, logs, or plain text documents, this application provides an intuitive interface and advanced features to make file management effortless.
+A fast, Git‑aware file combiner and code prep tool with a modern Qt UI. Merge many source files into a clean, single output — great for LLM prompts, reviews, or quick sharing. Includes a diff viewer and a file tree exporter.
 
-Say goodbye to the hassle of manual file merging—our application ensures accuracy, efficiency, and customization at every step.
-
-Features
---------
-- Flexible File Combining:
-  Effortlessly merge supported files (e.g., .txt, .py, .js, .log) into a single, organized output file with clear separators.
-  
-- Advanced File Preview:
-  View the contents of any selected file in real-time before combining. Includes line numbers for easy navigation.
-
-- Smart Exclusion Management:
-  Exclude specific folders, file patterns (e.g., *.log), or individual files with a few clicks to focus on what matters.
-
-- Persistent Settings:
-  Save and reload your exclusion preferences automatically to maintain consistency across sessions.
-
-- Dynamic Theme Options:
-  Switch between system default, light, or dark themes to suit your visual preferences.
-
-- Live Progress Updates:
-  Monitor file scanning and merging processes with detailed progress bars and real-time status updates.
-
-- Quick File Search:
-  Instantly locate files with a powerful search bar, even in extensive file lists.
-
-- Lightweight Logging:
-  Capture essential application events and errors to ensure reliability, with logs stored in a user-friendly location.
-
-Why Choose the Code Combiner for LLMs Application?
------------------------------------------
-Designed for professionals, developers, and anyone dealing with large file collections, this application offers:
-- Speed: Process hundreds of files in seconds.
-- Customization: Exclude irrelevant files or folders to maintain focus.
-- Simplicity: A clean and modern interface built for everyone, from beginners to experts.
-
-How to Use
+Highlights
 ----------
-1. Select Your Folder:
-   Click "Browse Folder" to choose the directory containing the files you want to combine.
+- Gitignore‑aware scanning: honors `.gitignore` (toggleable) and your custom exclusions.
+- Powerful exclusions: exclude by folder names, relative folders, file patterns, or explicit files; save/load profiles.
+- Live preview with syntax highlight: quick peek for many languages; safe limits for huge files.
+- Combine selected or all files: writes atomically; skips very large files with a clear note; binary files are summarized.
+- File tree export: Unicode/ASCII styles, optional sizes, Markdown fenced output.
+- Compare page: side‑by‑side or unified (git‑style) diffs; copy unified patch.
+- Theming: System, Light variants, Dark, and ultra‑dark tints with tuned QSS.
+- Persistent prefs: remembers folders, toggles, window state, UI scale, and last export directory.
 
-2. Customize Your Exclusions:
-   Use the "Exclusion Settings" tab to filter out unwanted files, folders, or file types.
+Quick Start (GUI)
+-----------------
+1. Run the app (`python run.py` or the packaged binary).
+2. Pick a folder (or drag & drop).
+3. Tweak exclusions and search; preview files.
+4. Generate combined output; save where you like.
+5. Export a file tree or compare texts in the Compare page.
 
-3. Search and Preview:
-   Quickly locate files with the search bar and preview their content, complete with line numbers.
+CLI (headless)
+--------------
+Use the core engine in scripts/CI:
 
-4. Combine Your Files:
-   Click "Generate Combined Output" to merge the selected files into a single file. Save it in your desired location.
+    python -m src.cli <root> [-o out.txt] [--no-gitignore] \
+        [--use-default-folder-names] \
+        [--exclude-folder REL] [--exclude-file-pattern PAT] [--exclude-file ABS]
 
-5. Switch Directories:
-   Need to process files from another folder? Click "Change Folder" anytime.
+Example:
 
-Supported File Formats
-----------------------
-- .txt: Plain text files
-- .py: Python scripts
-- .js: JavaScript files
-- .log: Log files
-- Other text-based formats with detectable encoding.
+    python -m src.cli . -o combined.txt --use-default-folder-names \
+        --exclude-file-pattern "*.log" --exclude-folder dist
+
+Build/Package
+-------------
+PyInstaller spec files are included. For a quick run from source, install deps from `requirements.txt` and run `python run.py`.
 
 License
 -------
-This application is distributed under the MIT License. Feel free to use, modify, and distribute it as per the license terms.
-
-Acknowledgments
----------------
-- Developed with customtkinter for a sleek and modern graphical user interface.
-- Powered by chardet for reliable file encoding detection.
-
-Experience the simplicity and efficiency of managing multiple files. Try the Code Combiner for LLMs Application today!
+MIT

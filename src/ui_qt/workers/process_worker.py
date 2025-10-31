@@ -11,12 +11,13 @@ class ProcessWorker(QThread):
     status = Signal(str)
     done = Signal(bool, str, str)    # ok, out_path, err
 
-    def __init__(self, state, files: List[Tuple[str, str, str]], out_path: str):
+    def __init__(self, state, files: List[Tuple[str, str, str]], out_path: str, *, include_toc: bool = False):
         super().__init__()
         self.state = state
         self.files = files
         self.out_path = out_path
         self.cancel_event = QtCancelEvent()
+        self.include_toc = include_toc
 
     def cancel(self):
         self.cancel_event.set()
@@ -32,7 +33,7 @@ class ProcessWorker(QThread):
             self.status.emit(f"Processing file {proc}/{total}")
 
         try:
-            ok = st.processor.process_files(self.files, self.out_path, cb, self.cancel_event)
+            ok = st.processor.process_files(self.files, self.out_path, cb, self.cancel_event, include_toc=self.include_toc)
             if ok:
                 self.done.emit(True, self.out_path, "")
             else:

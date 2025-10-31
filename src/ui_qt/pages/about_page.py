@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import PrimaryPushButton, PushButton, InfoBar, InfoBarPosition
 
 from src.utils.sysinfo import build_report
+from src.ui_qt.utils import resource_path
 from src.ui_qt.widgets.busy_overlay import BusyOverlay
 
 if TYPE_CHECKING:
@@ -33,11 +34,8 @@ class SysinfoWorker(QThread):
 
 
 def _resource_path(relative_path: str) -> str:
-    try:
-        base_path = os.sys._MEIPASS  # pyinstaller
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+    # Keep compatibility wrapper but delegate to shared util
+    return resource_path(relative_path)
 
 
 # ---------- page ----------

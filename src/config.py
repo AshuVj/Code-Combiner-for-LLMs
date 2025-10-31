@@ -33,8 +33,6 @@ BINARY_FILE_EXTENSIONS = {
     ".db", ".sqlite3", ".dat", ".bin", ".lock", ".log",
 }
 
-SETTINGS_FILENAME = "exclusion_settings.json"
-
 # Preview limits / chunking
 PREVIEW_CHUNK_SIZE = 10240                # characters for preview
 PREVIEW_MAX_BYTES = 2 * 1024 * 1024       # 2 MB
@@ -43,5 +41,4 @@ PREVIEW_MAX_BYTES = 2 * 1024 * 1024       # 2 MB
 PROCESS_MAX_BYTES = 50 * 1024 * 1024      # 50 MB
 
 # UI
-WINDOW_SIZE = "1200x800"
 WINDOW_TITLE = "Code Combiner for LLMs"

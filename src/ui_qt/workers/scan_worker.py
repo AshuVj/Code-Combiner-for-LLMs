@@ -34,19 +34,6 @@ class ScanWorker(QThread):
         st.scanner.apply_gitignore = bool(st.apply_gitignore)
         st.scanner.excluded_folder_names = set(EXCLUDED_FOLDER_NAMES_DEFAULT) if st.use_default_folder_names else set()
 
-        total = 0
-        for _ in st.scanner.yield_files():
-            if self._stop:
-                self.status.emit("Scan cancelled.")
-                self.finishedOk.emit()
-                return
-            total += 1
-
-        if total == 0:
-            self.status.emit("No files found.")
-            self.finishedOk.emit()
-            return
-
         processed = 0
         batch: List[Tuple[str, str, str]] = []
         chunk_size = 180
@@ -60,13 +47,17 @@ class ScanWorker(QThread):
             if len(batch) >= chunk_size:
                 self.batch.emit(batch.copy())
                 batch.clear()
-                self.progress.emit(processed, total)
-                self.status.emit(f"Scanning… {processed}/{total}")
+                # Indeterminate progress during single-pass scan (total=0)
+                self.progress.emit(processed, 0)
+                self.status.emit(f"Scanning… {processed} files")
                 time.sleep(0.003)
 
-        if not self._stop and batch:
-            self.batch.emit(batch.copy())
-            self.progress.emit(processed, total)
-            self.status.emit(f"Scan complete. Found {processed} files.")
+        if not self._stop:
+            if batch:
+                self.batch.emit(batch.copy())
+            if processed == 0:
+                self.status.emit("No files found.")
+            else:
+                self.status.emit(f"Scan complete. Found {processed} files.")
 
         self.finishedOk.emit()

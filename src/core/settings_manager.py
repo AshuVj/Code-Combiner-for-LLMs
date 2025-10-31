@@ -2,9 +2,15 @@
 
 import json
 import os
+import hashlib
+import re
+from pathlib import Path
 from typing import Dict, Any
+
+from platformdirs import user_config_dir
 from src.utils.logger import logger
 from src.config import SETTINGS_FILENAME
+from src.utils.prefs import APP_NAME, APP_AUTHOR
 
 def _ensure_gitignore_rule(base_folder: str, rule: str) -> None:
     try:
@@ -22,65 +28,108 @@ def _ensure_gitignore_rule(base_folder: str, rule: str) -> None:
         # Best-effort; never crash on ignore add
         pass
 
-def _hide_on_windows(path: str) -> None:
-    if os.name != "nt":
-        return
-    try:
-        import ctypes
-        FILE_ATTRIBUTE_HIDDEN = 0x2
-        FILE_ATTRIBUTE_SYSTEM = 0x4
-        GetFileAttributesW = ctypes.windll.kernel32.GetFileAttributesW
-        SetFileAttributesW = ctypes.windll.kernel32.SetFileAttributesW
-        GetFileAttributesW.argtypes = [ctypes.c_wchar_p]
-        SetFileAttributesW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
-
-        attrs = GetFileAttributesW(path)
-        if attrs == 0xFFFFFFFF:
-            return  # file not found or error
-        new_attrs = attrs | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
-        SetFileAttributesW(path, new_attrs)
-    except Exception:
-        # Best-effort; never crash on attribute set
-        pass
+def _project_slug(path: str) -> str:
+    norm = os.path.abspath(path)
+    tail = Path(norm).name or "project"
+    safe_tail = re.sub(r"[^A-Za-z0-9._-]+", "_", tail)[:40] or "project"
+    digest = hashlib.sha1(norm.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    return f"{safe_tail}-{digest}"
 
 class SettingsManager:
     def __init__(self, base_folder: str):
-        self.base_folder = base_folder
-        self.settings_path = os.path.join(base_folder, SETTINGS_FILENAME)
+        self.base_folder = os.path.abspath(base_folder)
+        self.base_path = Path(self.base_folder) / SETTINGS_FILENAME
+        slug = _project_slug(self.base_folder)
+        self.fallback_dir = Path(user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR)) / "projects" / slug
+        self.fallback_path = self.fallback_dir / SETTINGS_FILENAME
+        self.storage_path = self.base_path
+        self.using_fallback = False
+        self.last_error: str | None = None
+        self.last_warning: str | None = None
 
     def save_settings(self, settings: Dict[str, Any]) -> bool:
-        try:
-            os.makedirs(self.base_folder, exist_ok=True)
-            with open(self.settings_path, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=4)
+        self.last_error = None
+        self.last_warning = None
 
-            # Make sure Git ignores it and Windows hides it
-            _ensure_gitignore_rule(self.base_folder, SETTINGS_FILENAME)
-            _hide_on_windows(self.settings_path)
+        candidates: list[tuple[Path, bool]]
+        if self.using_fallback:
+            candidates = [(self.fallback_path, False)]
+        else:
+            candidates = [(self.base_path, True), (self.fallback_path, False)]
 
-            logger.info(f"Settings saved to {self.settings_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save settings: {str(e)}")
-            return False
+        last_exc: Exception | None = None
+
+        for path, is_base in candidates:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=4)
+
+                if is_base:
+                    _ensure_gitignore_rule(self.base_folder, SETTINGS_FILENAME)
+                    self.using_fallback = False
+                    self.storage_path = path
+                    self.last_error = None
+                    logger.info("Settings saved to %s", path)
+                    return True
+
+                # fallback success
+                self.using_fallback = True
+                self.storage_path = path
+                self.last_error = None
+                self.last_warning = (
+                    f"Project settings saved to {path} because the project folder is not writable."
+                )
+                logger.info("Settings saved to fallback path %s", path)
+                return True
+            except Exception as e:
+                last_exc = e
+                continue
+
+        if last_exc:
+            self.last_error = str(last_exc)
+            logger.error("Failed to save settings: %s", last_exc, exc_info=True)
+        return False
 
     def load_settings(self) -> Dict[str, Any]:
-        try:
-            if os.path.exists(self.settings_path):
-                # Re-hide if a previous version forgot
-                _hide_on_windows(self.settings_path)
-                _ensure_gitignore_rule(self.base_folder, SETTINGS_FILENAME)
+        self.last_error = None
+        self.last_warning = None
 
-                with open(self.settings_path, "r", encoding="utf-8") as f:
+        paths: list[tuple[Path, bool]] = [(self.base_path, True), (self.fallback_path, False)]
+        if self.using_fallback:
+            paths.insert(0, paths.pop(1))  # ensure fallback checked first
+
+        for path, is_base in paths:
+            if not path.exists():
+                continue
+            try:
+                with path.open("r", encoding="utf-8") as f:
                     settings = json.load(f)
-                required = ["selected_folder","excluded_folders","excluded_folder_names","excluded_file_patterns","excluded_files"]
+                required = [
+                    "selected_folder",
+                    "excluded_folders",
+                    "excluded_folder_names",
+                    "excluded_file_patterns",
+                    "excluded_files",
+                ]
                 for k in required:
                     if k not in settings:
                         settings[k] = [] if k != "selected_folder" else ""
-                logger.info(f"Settings loaded from {self.settings_path}")
+
+                if is_base:
+                    _ensure_gitignore_rule(self.base_folder, SETTINGS_FILENAME)
+                    self.using_fallback = False
+                else:
+                    self.using_fallback = True
+                    self.last_warning = (
+                        f"Loaded project settings from {path} because the project folder is not writable."
+                    )
+                self.storage_path = path
+                logger.info("Settings loaded from %s", path)
                 return settings
-            logger.info("No settings file found to load.")
-            return {}
-        except Exception as e:
-            logger.error(f"Failed to load settings: {str(e)}")
-            return {}
+            except Exception as e:
+                self.last_error = str(e)
+                logger.error("Failed to load settings from %s: %s", path, e, exc_info=True)
+
+        logger.info("No settings file found to load.")
+        return {}

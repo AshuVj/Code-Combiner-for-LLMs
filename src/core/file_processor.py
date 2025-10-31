@@ -33,6 +33,7 @@ class FileProcessor:
         output_path: str,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         cancel_event: Optional[CancelEventLike] = None,  # duck-typed: has is_set()
+        include_toc: bool = False,
     ) -> bool:
         """
         Process and combine files, handling text and binary types.
@@ -46,14 +47,28 @@ class FileProcessor:
         try:
             with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tmp:
                 tmp_path = tmp.name
+                # Optional TOC (Markdown w/ anchors)
+                if include_toc:
+                    try:
+                        tmp.write("# Table of Contents\n\n")
+                        for i, (_filename, rel_path, _file_type) in enumerate(files, start=1):
+                            tmp.write(f"- [{rel_path}](#file-{i})\n")
+                        tmp.write("\n\n")
+                    except Exception as e:
+                        logger.warning(f"Failed writing TOC: {e}")
 
-                for (filename, rel_path, file_type) in files:
+                for i, (filename, rel_path, file_type) in enumerate(files, start=1):
                     if cancel_event and getattr(cancel_event, "is_set", None) and cancel_event.is_set():
                         tmp.write("\n[Operation cancelled by user]\n")
                         logger.info("Processing cancelled by user.")
                         break
 
                     file_path = os.path.join(self.base_folder, rel_path)
+
+                    # Per-file anchor and heading when TOC is enabled
+                    if include_toc:
+                        tmp.write(f"\n<a id=\"file-{i}\"></a>\n")
+                        tmp.write(f"## {rel_path}\n\n")
 
                     tmp.write(f"\n{'=' * 80}\n")
                     tmp.write(f"File: {filename}\n")

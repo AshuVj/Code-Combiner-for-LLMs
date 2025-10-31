@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.ui_qt.app_window import MainFluentWindow
 
 from PySide6.QtCore import Qt, QPoint, QUrl
-from PySide6.QtGui import QFont, QTextOption, QAction, QShortcut, QKeySequence, QDesktopServices
+from PySide6.QtGui import QFont, QTextOption, QAction, QShortcut, QKeySequence, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFileDialog, QSplitter,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu,
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     PrimaryPushButton, PushButton, InfoBar, InfoBarPosition,
-    LineEdit, ComboBox, SwitchButton
+    LineEdit, ComboBox, SwitchButton, FluentIcon
 )
 
 # Optional syntax highlighting (graceful if missing)
@@ -45,6 +45,7 @@ from src.config import (
 from src.ui_qt.workers.scan_worker import ScanWorker
 from src.ui_qt.workers.process_worker import ProcessWorker
 from src.ui_qt.workers.tree_worker import TreeWorker
+from src.ui_qt.widgets.busy_overlay import BusyOverlay
 
 def default_output_filename(base_folder: str) -> str:
     base = os.path.basename((base_folder or "").rstrip("\\/")) or "combined_output"
@@ -69,6 +70,7 @@ class FilesPage(QWidget):
     # ---- Type mapping helpers --------------------------------------------
     _EXT_TYPE_MAP = {
         ".py": "Python", ".pyw": "Python",
+        ".pyi": "Python Stubs",
         ".json": "JSON", ".jsonc": "JSONC",
         ".toml": "TOML",
         ".yaml": "YAML", ".yml": "YAML",
@@ -87,7 +89,7 @@ class FilesPage(QWidget):
         ".cs": "C#", ".java": "Java", ".kt": "Kotlin",
         ".go": "Go", ".rs": "Rust", ".rb": "Ruby",
         ".php": "PHP", ".swift": "Swift",
-        ".sh": "Shell", ".ps1": "PowerShell", ".bat": "Batch",
+        ".sh": "Shell", ".ps1": "PowerShell", ".bat": "Batch", ".cmd": "Batch",
     }
     _NAME_TYPE_MAP = {
         "makefile": "Makefile",
@@ -109,6 +111,8 @@ class FilesPage(QWidget):
         self.proc_thread: Optional[ProcessWorker] = None
         self.tree_thread: Optional[TreeWorker] = None
         self.last_output_path: Optional[str] = None
+        self.overlay = BusyOverlay(self)
+        self.overlay.hide()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -116,14 +120,49 @@ class FilesPage(QWidget):
         title.setStyleSheet("font-size:20px; font-weight:600;")
         root.addWidget(title)
 
+        # Quick actions bar
+        actions = QHBoxLayout()
+        self.btn_quick_generate = PrimaryPushButton("Generate")
+        try:
+            self.btn_quick_generate.setIcon(FluentIcon.SAVE.icon())
+        except Exception:
+            pass
+        self.btn_quick_export = PushButton("Export Tree")
+        try:
+            self.btn_quick_export.setIcon(FluentIcon.BRANCH.icon())
+        except Exception:
+            pass
+        self.btn_quick_compare = PushButton("Compare")
+        try:
+            self.btn_quick_compare.setIcon(FluentIcon.CODE.icon())
+        except Exception:
+            pass
+        actions.addWidget(self.btn_quick_generate)
+        actions.addWidget(self.btn_quick_export)
+        actions.addStretch(1)
+        actions.addWidget(self.btn_quick_compare)
+        root.addLayout(actions)
+
         top_row = QHBoxLayout()
         self.folder_edit = LineEdit(self)
         self.folder_edit.setPlaceholderText("Select or drop a folder here…")
         browse_btn = PrimaryPushButton("Browse")
+        try:
+            browse_btn.setIcon(FluentIcon.FOLDER.icon())
+        except Exception:
+            pass
         self.recent_combo = ComboBox(self); self.recent_combo.setFixedWidth(260)
         self.recent_combo.addItems(self._load_recent_folders())
         refresh_btn = PushButton("Refresh (F5)")
+        try:
+            refresh_btn.setIcon(FluentIcon.SYNC.icon())
+        except Exception:
+            pass
         self.cancel_scan_btn = PushButton("Cancel Scan")
+        try:
+            self.cancel_scan_btn.setIcon(FluentIcon.CLOSE.icon())
+        except Exception:
+            pass
         self.cancel_scan_btn.setEnabled(False)
         top_row.addWidget(self.folder_edit, 1)
         top_row.addWidget(browse_btn)
@@ -177,11 +216,27 @@ class FilesPage(QWidget):
         select_all_btn = PushButton("Select All (Ctrl+A)")
         deselect_all_btn = PushButton("Deselect All")
         self.copy_output_btn = PushButton("Copy Last Output"); self.copy_output_btn.setEnabled(False)
+        try:
+            self.copy_output_btn.setIcon(FluentIcon.COPY.icon())
+        except Exception:
+            pass
+        self.open_output_btn = PushButton("Open Last Output"); self.open_output_btn.setEnabled(False)
+        try:
+            self.open_output_btn.setIcon(FluentIcon.OPEN.icon())
+        except Exception:
+            pass
+        self.reveal_output_btn = PushButton("Reveal Last Output"); self.reveal_output_btn.setEnabled(False)
+        try:
+            self.reveal_output_btn.setIcon(FluentIcon.FOLDER.icon())
+        except Exception:
+            pass
         act_row.addWidget(exclude_btn)
         act_row.addWidget(select_all_btn)
         act_row.addWidget(deselect_all_btn)
         act_row.addStretch(1)
         act_row.addWidget(self.copy_output_btn)
+        act_row.addWidget(self.open_output_btn)
+        act_row.addWidget(self.reveal_output_btn)
         left_lay.addLayout(act_row)
 
         split.addWidget(left)
@@ -199,12 +254,29 @@ class FilesPage(QWidget):
 
         gen_row = QHBoxLayout()
         generate_selected_btn = PrimaryPushButton("Generate Selected Output")
+        try:
+            generate_selected_btn.setIcon(FluentIcon.SAVE.icon())
+        except Exception:
+            pass
         generate_all_btn = PrimaryPushButton("Generate Combined Output")
+        try:
+            generate_all_btn.setIcon(FluentIcon.SAVE.icon())
+        except Exception:
+            pass
         cancel_proc_btn = PushButton("Cancel Process")
+        try:
+            cancel_proc_btn.setIcon(FluentIcon.CLOSE.icon())
+        except Exception:
+            pass
         export_tree_btn = PushButton("Export File Tree")
+        try:
+            export_tree_btn.setIcon(FluentIcon.BRANCH.icon())
+        except Exception:
+            pass
         self.opt_markdown = QCheckBox("Markdown tree")
         self.opt_ascii = QCheckBox("ASCII tree")
         self.opt_sizes = QCheckBox("Include sizes")
+        self.opt_toc = QCheckBox("Include TOC")
         gen_row.addWidget(generate_selected_btn)
         gen_row.addWidget(generate_all_btn)
         gen_row.addWidget(cancel_proc_btn)
@@ -213,6 +285,7 @@ class FilesPage(QWidget):
         gen_row.addWidget(self.opt_markdown)
         gen_row.addWidget(self.opt_ascii)
         gen_row.addWidget(self.opt_sizes)
+        gen_row.addWidget(self.opt_toc)
         root.addLayout(gen_row)
 
         bar_row = QHBoxLayout()
@@ -231,6 +304,8 @@ class FilesPage(QWidget):
         clear_btn.clicked.connect(lambda: self.search_edit.setText(""))
         self.recent_combo.currentTextChanged.connect(self._recent_pick)
         self.copy_output_btn.clicked.connect(self._copy_last_output)
+        self.open_output_btn.clicked.connect(self._open_last_output)
+        self.reveal_output_btn.clicked.connect(self._reveal_last_output)
 
         self.table.itemSelectionChanged.connect(self._on_table_selection_changed)
         self.search_edit.textChanged.connect(self._apply_filter)
@@ -245,9 +320,19 @@ class FilesPage(QWidget):
         cancel_proc_btn.clicked.connect(self._cancel_process)
         export_tree_btn.clicked.connect(self._export_tree)
 
+        # quick actions
+        self.btn_quick_generate.clicked.connect(self._generate_all)
+        self.btn_quick_export.clicked.connect(self._export_tree)
+        self.btn_quick_compare.clicked.connect(lambda: self.appwin.switchTo(self.appwin.compare_page))
+
         self.sw_git.checkedChanged.connect(self._toggles_changed)
         self.sw_defaults.checkedChanged.connect(self._toggles_changed)
         self.sw_outputs.checkedChanged.connect(self._toggles_changed)
+        # persist TOC option
+        try:
+            self.opt_toc.stateChanged.connect(self._save_toc_pref)
+        except Exception:
+            pass
 
         QShortcut(QKeySequence("Ctrl+F"), self, activated=lambda: self.search_edit.setFocus())
         QShortcut(QKeySequence("F5"), self, activated=self.refresh_files)
@@ -265,6 +350,10 @@ class FilesPage(QWidget):
         self.state.apply_gitignore = bool(prefs.get("apply_gitignore", True))
         self.state.use_default_folder_names = bool(prefs.get("use_default_folder_names", False))
         self.state.auto_hide_outputs = bool(prefs.get("auto_hide_outputs", False))
+        try:
+            self.opt_toc.setChecked(bool(prefs.get("include_toc", False)))
+        except Exception:
+            pass
         self.sw_git.setChecked(self.state.apply_gitignore)
         self.sw_defaults.setChecked(self.state.use_default_folder_names)
         self.sw_outputs.setChecked(self.state.auto_hide_outputs)
@@ -333,11 +422,23 @@ class FilesPage(QWidget):
 
     # folder / scan
     def set_folder(self, folder: str):
+        # Save settings for previous project (if any)
+        try:
+            if self.state.selected_folder and self.state.settings_mgr:
+                self.appwin.save_settings()
+        except Exception:
+            pass
         folder = os.path.abspath(folder)
         self.state.selected_folder = folder
         self.state.scanner = FileScanner(folder)
         self.state.processor = FileProcessor(folder)
         self.state.settings_mgr = SettingsManager(folder)
+        # Create a baseline settings file only if one does not already exist
+        try:
+            if not os.path.exists(self.state.settings_mgr.settings_path):
+                self.appwin.save_settings()
+        except Exception:
+            pass
         self.folder_edit.setText(folder)
         prefs = load_prefs()
         prefs["last_folder"] = folder
@@ -349,6 +450,11 @@ class FilesPage(QWidget):
         if not folder:
             return
         self.set_folder(folder)
+        # Load any existing per-project settings before scanning
+        try:
+            self.appwin.load_settings()
+        except Exception:
+            pass
         self.refresh_files()
         InfoBar.success("Folder selected", folder, parent=self.appwin, duration=2000, position=InfoBarPosition.TOP_RIGHT)
 
@@ -358,6 +464,11 @@ class FilesPage(QWidget):
         if not st.scanner or not st.selected_folder:
             self.status.setText("No folder selected.")
             return
+        # Ensure we apply any settings saved in the project folder before scanning
+        try:
+            self.appwin.load_settings()
+        except Exception:
+            pass
 
         st.scanner.excluded_folders = set(st.excluded_folders)
         st.scanner.excluded_file_patterns = set(st.excluded_file_patterns)
@@ -369,6 +480,10 @@ class FilesPage(QWidget):
         self.status.setText("Scanning files…")
         self._set_buttons_enabled(False)
         self.cancel_scan_btn.setEnabled(True)
+        try:
+            self.overlay.show_message("Scanning…")
+        except Exception:
+            pass
 
         if self.scan_thread and self.scan_thread.isRunning():
             self.scan_thread.stop()
@@ -395,6 +510,13 @@ class FilesPage(QWidget):
         self._apply_filter()
 
     def _on_scan_progress(self, proc: int, total: int):
+        if total <= 0:
+            # Indeterminate during single-pass scan
+            if self.progress.minimum() != 0 or self.progress.maximum() != 0:
+                self.progress.setRange(0, 0)
+            return
+        if self.progress.minimum() == 0 and self.progress.maximum() == 0:
+            self.progress.setRange(0, 100)
         pct = int((proc / max(1, total)) * 100)
         self.progress.setValue(pct)
 
@@ -402,6 +524,15 @@ class FilesPage(QWidget):
         self._set_buttons_enabled(True)
         self.cancel_scan_btn.setEnabled(False)
         self._update_sel_stats()
+        try:
+            self.overlay.stop()
+        except Exception:
+            pass
+        # Reset progress to determinate and complete
+        if self.progress.minimum() == 0 and self.progress.maximum() == 0:
+            self.progress.setRange(0, 100)
+        # If there are rows, show 100%; else leave at 0
+        self.progress.setValue(100 if self.table.rowCount() > 0 else 0)
 
     def _set_status(self, text: str):
         self.status.setText(text)
@@ -583,11 +714,21 @@ class FilesPage(QWidget):
     # generate / export
     def _ask_output_path(self) -> str:
         suggested = default_output_filename(self.state.selected_folder)
+        prefs = load_prefs()
+        base_dir = prefs.get("last_output_dir")
+        if not base_dir or not os.path.isdir(base_dir):
+            base_dir = self.state.selected_folder or os.path.expanduser("~")
         out, _ = QFileDialog.getSaveFileName(
             self, "Save Combined Output As",
-            os.path.join(self.state.selected_folder or os.path.expanduser("~"), suggested),
+            os.path.join(base_dir, suggested),
             "Text files (*.txt);;All files (*.*)"
         )
+        if out:
+            try:
+                prefs["last_output_dir"] = os.path.dirname(out)
+                save_prefs(prefs)
+            except Exception:
+                pass
         return out or ""
 
     def _generate_selected(self):
@@ -618,12 +759,16 @@ class FilesPage(QWidget):
         self.progress.setValue(0)
         self.status.setText("Generating combined output…")
         self._set_buttons_enabled(False)
+        try:
+            self.overlay.show_message("Generating output…")
+        except Exception:
+            pass
 
         if self.proc_thread and self.proc_thread.isRunning():
             InfoBar.info("Busy", "A generation is already running.", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
             return
 
-        self.proc_thread = ProcessWorker(self.state, files, out_path)
+        self.proc_thread = ProcessWorker(self.state, files, out_path, include_toc=self.opt_toc.isChecked())
         self.proc_thread.progress.connect(self._on_proc_progress)
         self.proc_thread.status.connect(self._set_status)
         self.proc_thread.done.connect(self._proc_done)
@@ -639,11 +784,17 @@ class FilesPage(QWidget):
         if ok:
             self.last_output_path = path
             self.copy_output_btn.setEnabled(True)
+            self.open_output_btn.setEnabled(True)
+            self.reveal_output_btn.setEnabled(True)
             self.status.setText("Output generation complete")
             InfoBar.success("Saved", f"Combined output saved to:\n{path}", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT, duration=3000)
         else:
             self.status.setText("Failed to generate output")
             InfoBar.error("Error", err or "Failed to generate combined output.", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
+        try:
+            self.overlay.stop()
+        except Exception:
+            pass
 
     def _copy_last_output(self):
         if not self.last_output_path or not os.path.exists(self.last_output_path):
@@ -655,6 +806,26 @@ class FilesPage(QWidget):
             InfoBar.success("Copied", "Output copied to clipboard.", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
         except Exception as e:
             InfoBar.error("Copy failed", str(e), parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
+
+    def _open_last_output(self):
+        if not self.last_output_path or not os.path.exists(self.last_output_path):
+            InfoBar.info("Nothing to open", "No recent output found.", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
+            return
+        self._open_path(self.last_output_path)
+
+    def _reveal_last_output(self):
+        if not self.last_output_path or not os.path.exists(self.last_output_path):
+            InfoBar.info("Nothing to reveal", "No recent output found.", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
+            return
+        self._reveal_in_explorer(self.last_output_path)
+
+    def _save_toc_pref(self, *_):
+        prefs = load_prefs()
+        try:
+            prefs["include_toc"] = bool(self.opt_toc.isChecked())
+        except Exception:
+            prefs["include_toc"] = False
+        save_prefs(prefs)
 
     def _cancel_process(self):
         if self.proc_thread and self.proc_thread.isRunning():
@@ -844,10 +1015,12 @@ class FilesPage(QWidget):
                 self._preview_show_text(content)
                 return
 
-            fmt = HtmlFormatter(style="monokai", linenos=True, noclasses=False)
+            dark = self.palette().color(QPalette.Window).lightness() < 128
+            style_name = "monokai" if dark else "friendly"
+            fmt = HtmlFormatter(style=style_name, linenos=True, noclasses=False)
             css = fmt.get_style_defs('.highlight')
             css_fix = """
-                .highlight { background: transparent; color: #ddd; }
+                .highlight { background: transparent; }
                 .highlight pre { margin: 0; }
                 .linenos { opacity: .6; }
             """
