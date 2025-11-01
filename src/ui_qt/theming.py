@@ -95,6 +95,7 @@ def _clear_styles(widget: QWidget | None) -> None:
             pass
 
 def _apply_css(widget: Optional[QWidget], css: str) -> None:
+    """Applies QSS to a single widget, ensuring WA_StyledBackground is set."""
     if widget:
         widget.setAttribute(Qt.WA_StyledBackground, True)
         widget.setStyleSheet(css)
@@ -111,6 +112,7 @@ def _pages(window: Optional[QWidget]) -> list[QWidget]:
     return out
 
 def _content_dark_css(p: Dict[str, str]) -> str:
+    """QSS for content pages (dark themes)."""
     return f"""
 QWidget {{ background: {p['page']}; color: {p['fg']}; }}
 QPlainTextEdit, QTextEdit, QTextBrowser,
@@ -130,6 +132,7 @@ QHeaderView::section {{
 """
 
 def _content_light_css(p: Dict[str, str]) -> str:
+    """QSS for content pages (light themes)."""
     return f"""
 QWidget {{ background: {p['bg']}; color: {p['fg']}; }}
 QPlainTextEdit, QTextEdit, QTextBrowser,
@@ -148,8 +151,20 @@ QHeaderView::section {{
 }}
 """
 
-def _window_chrome_qss(bg: str, alt: str, fg: str, grid: str) -> str:
+def _build_main_window_qss(p: Dict[str, str], is_dark: bool) -> str:
+    """
+    NEW: Builds a SINGLE QSS string for the main window (chrome, nav, title).
+    This is more robust than applying styles to individual widgets.
+    """
+    # Use dark 'page' or light 'bg' for main window background
+    bg = p.get('page', p.get('bg', '#FFFFFF'))
+    alt = p.get('alt', '#EEEEEE')
+    fg = p.get('fg', '#000000')
+    grid = p.get('grid', '#DDDDDD')
+    accent = p.get('accent', '#3B82F6')
+
     return f"""
+/* --- Main Window Chrome --- */
 QLabel[styleClass="sectionHeader"] {{
     background: {alt};
     color: {fg};
@@ -170,10 +185,8 @@ QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
     border: 1px solid {grid};
     border-radius: 6px;
 }}
-"""
 
-def _titlebar_qss(bg: str, fg: str, grid: str) -> str:
-    return f"""
+/* --- Title Bar --- */
 FluentTitleBar#titleBar {{
     background-color: {bg};
     color: {fg};
@@ -185,11 +198,9 @@ FluentTitleBar#titleBar {{
     background: transparent;
     border: 0;
 }}
-"""
 
-def _nav_qss(bg: str, alt: str, fg: str, grid: str, accent: str) -> str:
-    return f"""
-#navigationInterface {{
+/* --- Navigation Bar --- */
+NavigationInterface#navigationInterface {{
     background-color: {bg};
     border-right: 1px solid {grid};
 }}
@@ -212,6 +223,7 @@ def _nav_qss(bg: str, alt: str, fg: str, grid: str, accent: str) -> str:
 """
 
 def _peek(label: str, w: QWidget, expect_hex: str | None = None):
+    """Debug logger to peek at widget state."""
     ss = w.styleSheet() or ""
     head = ss[:180].replace("\n", " ")
     contains = expect_hex in ss if expect_hex else None
@@ -228,22 +240,6 @@ def _peek(label: str, w: QWidget, expect_hex: str | None = None):
         f" contains({expect_hex})={contains}" if expect_hex else ""
     )
 
-def _reassert(label: str, w: QWidget | None, qss: str, expect_hex: str | None = None):
-    """Apply now, then re-apply at 0ms and 150ms to beat late library styling."""
-    if not w:
-        return
-    def apply_once(tag: str):
-        try:
-            w.setAttribute(Qt.WA_StyledBackground, True)
-            w.setStyleSheet(qss)
-            w.update()
-            _peek(f"{label}:{tag}", w, expect_hex)
-        except Exception as e:
-            log.warning("THEME: reassert(%s) failed: %s", label, e)
-    apply_once("now")
-    QTimer.singleShot(0, lambda: apply_once("later0"))
-    QTimer.singleShot(150, lambda: apply_once("later150"))
-
 # -----------------------------
 # Entry point
 # -----------------------------
@@ -259,12 +255,12 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
 
     log.info("apply_theme_by_name(name=%s)", name)
 
-    # Clear any prior per-instance styles
+    # Clear any prior per-instance styles from window and children
     for page in _pages(window):
         _clear_styles(page)
     _clear_styles(title_bar)
     _clear_styles(nav)
-    window.setStyleSheet("")
+    _clear_styles(window)
 
     # Ensure objectNames are right (QSS anchors)
     if title_bar and not title_bar.objectName():
@@ -278,8 +274,6 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
         setThemeColor(QColor("#2563EB"))
         _disable_effects(window)
         _peek("window:system", window)
-        if title_bar: _peek("titleBar:system", title_bar)
-        if nav: _peek("nav:system", nav)
         return
 
     # Light family
@@ -289,17 +283,15 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
         spec = _LIGHT_VARIANTS.get(name, _LIGHT_VARIANTS["Light"])
         setThemeColor(QColor(spec["accent"]))
 
-        # Content pages
+        # Apply content page styles
         for page in _pages(window):
             _apply_css(page, _content_light_css(spec))
 
-        # Window chrome (menus/scrollbars)
-        _reassert("window", window, _window_chrome_qss(spec["bg"], spec["alt"], spec["fg"], spec["grid"]), spec["bg"])
-        # Title bar / nav
-        if title_bar:
-            _reassert("titleBar", title_bar, _titlebar_qss(spec["bg"], spec["fg"], spec["grid"]), spec["bg"])
-        if nav:
-            _reassert("nav", nav, _nav_qss(spec["bg"], spec["alt"], spec["fg"], spec["grid"], spec["accent"]), spec["bg"])
+        # NEW: Apply ONE stylesheet to the main window for all chrome
+        main_qss = _build_main_window_qss(spec, is_dark=False)
+        _apply_css(window, main_qss)
+        
+        _peek("window:light", window, spec["bg"])
         return
 
     # Stock Dark
@@ -312,11 +304,11 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
         for page in _pages(window):
             _apply_css(page, _content_dark_css(spec))
 
-        _reassert("window", window, _window_chrome_qss(spec["page"], spec["alt"], spec["fg"], spec["grid"]), spec["page"])
-        if title_bar:
-            _reassert("titleBar", title_bar, _titlebar_qss(spec["page"], spec["fg"], spec["grid"]), spec["page"])
-        if nav:
-            _reassert("nav", nav, _nav_qss(spec["page"], spec["alt"], spec["fg"], spec["grid"], spec["accent"]), spec["page"])
+        # NEW: Apply ONE stylesheet to the main window
+        main_qss = _build_main_window_qss(spec, is_dark=True)
+        _apply_css(window, main_qss)
+
+        _peek("window:dark", window, spec["page"])
         return
 
     # Custom ultra-dark variants
@@ -325,7 +317,7 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
         log.warning("apply_theme_by_name: unknown theme name '%s'", name)
         return
 
-    setTheme(Theme.DARK)
+    setTheme(Theme.DARK) # Base it on dark theme
     _disable_effects(window)
     setThemeColor(QColor(spec["accent"]))
 
@@ -333,9 +325,9 @@ def apply_theme_by_name(name: str, window: Optional[QWidget] = None) -> None:
     for page in _pages(window):
         _apply_css(page, _content_dark_css(spec))
 
-    # Window chrome + bars (with delayed reassert)
-    _reassert("window", window, _window_chrome_qss(spec["page"], spec["alt"], spec["fg"], spec["grid"]), spec["page"])
-    if title_bar:
-        _reassert("titleBar", title_bar, _titlebar_qss(spec["page"], spec["fg"], spec["grid"]), spec["page"])
-    if nav:
-        _reassert("nav", nav, _nav_qss(spec["page"], spec["alt"], spec["fg"], spec["grid"], spec["accent"]), spec["page"])
+    # NEW: Apply ONE stylesheet to the main window
+    main_qss = _build_main_window_qss(spec, is_dark=True)
+    _apply_css(window, main_qss)
+    
+    _peek(f"window:{name}", window, spec["page"])
+

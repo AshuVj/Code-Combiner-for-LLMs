@@ -179,9 +179,11 @@ class ExclusionsPage(QWidget):
         self.state.excluded_folder_names   = set(p.get("folder_names", []))
         self.state.excluded_folders        = set(p.get("folders", []))
         self.state.excluded_file_patterns  = set(p.get("patterns", []))
+        
+        # BUGFIX: Save settings *before* refreshing files page
+        self.appwin.save_settings()
         self.refresh_ui_lists()
         self.appwin.files_page.refresh_files()
-        self.appwin.save_settings()
         InfoBar.success("Profile applied", name, parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
 
     def _save_profile(self):
@@ -233,9 +235,11 @@ class ExclusionsPage(QWidget):
         rel = os.path.normpath(os.path.relpath(abs_sel, self.state.selected_folder))
         if rel not in self.state.excluded_folders:
             self.state.excluded_folders.add(rel)
+            
+            # BUGFIX: Save settings *before* refreshing files page
+            self.appwin.save_settings()
             self.refresh_ui_lists()
             self.appwin.files_page.refresh_files()
-            self.appwin.save_settings()
             InfoBar.success("Folder excluded", rel, parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
         else:
             InfoBar.info("Already excluded", rel, parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
@@ -251,9 +255,11 @@ class ExclusionsPage(QWidget):
             if rel in self.state.excluded_folders:
                 self.state.excluded_folders.discard(rel)
                 removed += 1
+        
+        # BUGFIX: Save settings *before* refreshing files page
+        self.appwin.save_settings()
         self.refresh_ui_lists()
         self.appwin.files_page.refresh_files()
-        self.appwin.save_settings()
         InfoBar.success("Removed", f"Removed {removed} folder(s).", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
 
     def _add_pattern(self):
@@ -263,9 +269,12 @@ class ExclusionsPage(QWidget):
         pat = txt.strip()
         if pat not in self.state.excluded_file_patterns:
             self.state.excluded_file_patterns.add(pat)
+
+            # BUGFIX: Save settings *before* refreshing files page
+            self.appwin.save_settings()
             self.refresh_ui_lists()
             self.appwin.files_page.refresh_files()
-            self.appwin.save_settings()
+            
             if to_git and self.state.selected_folder:
                 try:
                     gi = os.path.join(self.state.selected_folder, ".gitignore")
@@ -295,9 +304,11 @@ class ExclusionsPage(QWidget):
             if txt in self.state.excluded_file_patterns:
                 self.state.excluded_file_patterns.discard(txt)
                 removed += 1
+        
+        # BUGFIX: Save settings *before* refreshing files page
+        self.appwin.save_settings()
         self.refresh_ui_lists()
         self.appwin.files_page.refresh_files()
-        self.appwin.save_settings()
         InfoBar.success("Removed", f"Removed {removed} pattern(s).", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)
 
     def _reincl_files(self):
@@ -312,7 +323,9 @@ class ExclusionsPage(QWidget):
             if abs_path in self.state.excluded_files_abs:
                 self.state.excluded_files_abs.discard(abs_path)
                 reincl += 1
+        
+        # BUGFIX: Save settings *before* refreshing files page
+        self.appwin.save_settings()
         self.refresh_ui_lists()
         self.appwin.files_page.refresh_files()
-        self.appwin.save_settings()
         InfoBar.success("Re-included", f"Re-included {reincl} file(s).", parent=self.appwin, position=InfoBarPosition.TOP_RIGHT)

@@ -1,7 +1,34 @@
+# ---------------------------------------------
+# 1. GENERATED ARTIFACTS (Python, Build, etc.)
+# ---------------------------------------------
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build files (PyInstaller, setuptools, etc.)
 build/
 dist/
 run.spec
 Installer/
-exclusion_settings.json
-__pycache__/
-*.pyc
+
+# Testing and Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Configuration Files (if they contain local paths/secrets)
+exclusion_settings.json 
+
+# ---------------------------------------------
+# 2. IDE / EDITOR FILES
+# ---------------------------------------------
+.vscode/
+.idea/
+*.swp
